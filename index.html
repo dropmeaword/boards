@@ -6,36 +6,30 @@
   body {
     overflow: hidden;
     margin: 0;
-  }
-  
-  #drag-bar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 22px;
-    -webkit-app-region: drag;
-  }
-  
-  #drag-bar.hidden {
-    display: none;
+    background: url(grid-pattern.png) left top repeat, -webkit-radial-gradient(50% 15%, #ababab, #505050) no-repeat;
   }
   
   #footer {
     padding: 0.5em;
     color: #ddd;
     font-family: Menlo, monospace;
+    font-size: 0.85em;
     text-align: center;
-    position: fixed;
+    /*position: fixed;*/
     
-    left: 50%;
-    width: 400px;
-    margin-left: -200px;
+    /*left: 50%;*/
+    width: 100%;
+    /*margin-left: -200px;*/
     
     z-index: -10;
     bottom: 0
   }
   
+#footer span {
+	color: #c0c0ff;
+	font-weight: bold;
+}
+
   svg {
     display: none;
     width: 100%;
@@ -50,7 +44,7 @@
   polyline {
     fill:none;
     stroke:black;
-    stroke-width:5;
+    stroke-width:3;
     stroke-linecap:round;
     stroke-linejoin:round;
     
@@ -61,44 +55,41 @@
   <script type="text/javascript">
       var github = new Github({});
       var loggedIn = false;
+
+      // chalk colors
+      var colors = ['#000000', '#ffa0a0', '#60ff60', '#4040ff', '#ffffff'];
+      var cidx = 0;
+      var opts = {
+        'showGrid'   : true,
+        'brushSize'  : 5,
+        'brushColor' : 'black',
+      };
   
       var tools = {
         pen: function(s) {
-          function startDrawing (e) {
-            e.preventDefault();
-            hideDragBar();
+          s.onmousedown = function(e) {
             // compute current transform matrix
             var matrix = page() ? page().querySelector("g").transform.baseVal[0].matrix
                                 : { e:0, f:0 }
 
             // add new line to board
             var newLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+            newLine.style.strokeWidth = opts['brushSize'];
+            newLine.style.stroke = opts['brushColor'];
+            console.log(newLine);
             s.querySelector("g").appendChild(newLine);
             
             // add points to line on move using matrix offset
-            s.touchmove = s.onmousemove = function(e) {
-              e.preventDefault();
+            s.onmousemove = function(e) {
               var p = s.createSVGPoint();
-              p.x = e.pageX - matrix.e;
-              p.y = e.pageY - matrix.f;
+              p.x = e.offsetX - matrix.e;
+              p.y = e.offsetY - matrix.f;
               newLine.points.appendItem(p);
             }
           }
-          document.onkeydown = function(e) {
-            if(e.charCode == 0 && e.shiftKey) {
-              startDrawing(e);
-            }
-          }
           
-          s.touchstart = s.onmousedown = function(e) {
-            if(e.altKey || e.buttons != 1 || e.button != 0) return;
-            startDrawing(e);
-          }
-          
-          document.onkeyup = s.touchend = s.onmouseup = function(e) {
-            e.preventDefault();
-            showDragBar();
-            s.touchmove = s.onmousemove = undefined;
+          s.onmouseup = function() {
+            s.onmousemove = undefined;
             pushGist();
           }
         },
@@ -108,31 +99,26 @@
           var lastEvent;
           
           // drag pen to pan
-          s.touchmove = s.onmousemove = function(e) {
-            e.preventDefault();
+          s.onmousemove = function(e) {
             if(!lastEvent)
               lastEvent = e;
             transform.setMatrix(transform.matrix.translate(
-              e.pageX - lastEvent.pageX,
-              e.pageY - lastEvent.pageY));
+              e.offsetX - lastEvent.offsetX,
+              e.offsetY - lastEvent.offsetY));
             lastEvent = e;
           }
           
           // on release button, change back to pen
-          s.onmouseup = function(e) {
-            showDragBar();
-            changeTool(page(), tools.pen);
-          }
+          document.onkeyup = function(e) { console.log("pen release"); changeTool(page(), tools.pen); }
         }
       }
     
       function page() { return document.querySelector("svg.current") }
       function root() { return page().querySelector("g") }
-      function lastMark() { return root().querySelector("polyline:last-child,image:last-child") }
+      function lastPolyline() { return root().querySelector("polyline:last-child") }
       function pressed(e, c) { return e.keyCode == c.charCodeAt(0) }
       
       function newBoard(content) {
-        if(page()) document.body.removeChild(page());
         var newBoard = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         if(content) {
           newBoard.innerHTML = content;
@@ -158,37 +144,48 @@
         enableTool(s, t);
       }
       
+      function toggleGrid() {
+        if( opts['showGrid'] == true ) {
+          document.body.style.background = '#ffffff';
+          opts['showGrid'] = false;
+        } else {
+          opts['showGrid'] = true;
+          document.body.style.background = 'url(grid-pattern.png) left top repeat, -webkit-radial-gradient(50% 15%, #ababab, #505050) no-repeat';
+        }
+      }
+
+      function rotateColor() {
+        cidx = cidx + 1;
+        if(cidx >= colors.length) { cidx = 0; }
+        return (opts['brushColor'] = colors[cidx]);
+      }
+
+      function addBrushSize(qty) {
+        opts['brushSize'] += qty;
+
+        if(opts['brushSize'] < 1) opts['brushSize'] = 1;
+        if(opts['brushSize'] > 12) opts['brushSize'] = 12;
+
+        console.log("brush = " + opts['brushSize']);
+      }
+
       function enableTool(s, t) {
         t(s);
       }
       
       function disableTool(s) {
-        s.touchstart = s.onmousedown = undefined;
-        s.touchmove = s.onmousemove = undefined;
-        s.touchend = s.onmouseup = undefined;
+        s.onmousedown = undefined;
+        s.onmousemove = undefined;
+        s.onmouseup = undefined;
         document.onkeyup = undefined; // HACK
       }
       
       function toStandaloneSVG(s) {
         // TODO dont hardcode style
-        var g = s.querySelector("g");
-        var transform = g.getAttribute("transform");
-        g.removeAttribute("transform");
-        
-        var border = 100;
-
-        var w = g.getBoundingClientRect().width + 2 * border;
-        var h = g.getBoundingClientRect().height + 2 * border;
-        var l = g.getBoundingClientRect().left - border;
-        var t = g.getBoundingClientRect().top - border;
-
-        var str = '<svg xmlns="http://www.w3.org/2000/svg" style="width:' + w + '; height:' + h + '" viewBox="' + l + ' ' + t + ' ' + w + ' ' + h + '">' + 
-                  '<title>' + 'board' + '</title>' +
-                  '<style> polyline {fill:none; stroke:black; stroke-width:5; stroke-linecap:round; stroke-linejoin:round; }</style>' +
-                  s.innerHTML + 
-                  '</svg>';
-        g.setAttribute("transform", transform);
-        return str;
+        return '<svg xmlns="http://www.w3.org/2000/svg">' + 
+               '<style> polyline {fill:none; stroke:black; stroke-width:5; stroke-linecap:round; stroke-linejoin:round; }</style>' +
+               s.innerHTML + 
+               '</svg>';
       }
       
       function stripSVGTags(s) {
@@ -198,16 +195,15 @@
       }
       
       function updateFooter (message) {
-        // document.querySelector("#footer").innerHTML = message;
+        document.querySelector("#footer").innerHTML = message;
       }
       
-      function pushGist(c) {
-        if(c === undefined) c = toStandaloneSVG(page());
+      function pushGist() {
         if(loggedIn)
           github.getGist(fragment()).update({
             files: {
               "board.svg": {
-                content: c
+                content: toStandaloneSVG(page())
               }
             }
           }, function(e, g) {
@@ -216,37 +212,6 @@
           });
       }
       
-      function toStandaloneHTML(s, title) {
-        if(title == undefined) title = "Board";
-        var header = "<html>\n" +
-                     "<head>\n" +
-                     "<title>" + title + "</title>\n" +
-                     '<style type="text/css"> body { margin: 0; overflow: scroll; } </style>\n' +
-                     "<\/head>\n" + 
-                     "<body>";
-        var body = toStandaloneSVG(s);
-        var footer = "</body>\n</html>"
-        
-        return header + body + footer;
-      }
-      
-      function download() {
-        var d = new Date().toLocaleString().
-                           replace(/\//g, "-").
-                           replace(/:/g, "-").
-                           replace(/,/g, "-").
-                           replace(/ /g, "");
-        var title = "Board " + d;
-        var content = toStandaloneHTML(page(), title);
-        var blob = new Blob([content], {type:"text/html"});
-        var a = document.createElement("a");
-        a.href = window.URL.createObjectURL(blob);
-        a.setAttribute("download", title + ".html");
-        a.click();
-      }
-      
-      const {shell} = require('electron')
-      
       function save() {
         var oldKeyDown = document.onkeydown;
         document.onkeydown = undefined;
@@ -254,9 +219,8 @@
         
         textPrompt("username", function(username) {
           passwordPrompt("password", function(password) {
-            textPrompt("title", function(title) {
-              // WIP disabling gist streaming
-              // loggedIn = true;
+            textPrompt("description", function(description) {
+              loggedIn = true;
               
               github = new Github({
                 username: username,
@@ -264,22 +228,20 @@
                 auth: "basic"
               });
               
-              // WIP disabling gist streaming
-              // var f = fragment() ? "update" : "create";
-              var f = "create";
-              var filename = title + ".svg";
-              var files = {};
-              files[filename] = {content:toStandaloneSVG(page())};
+              var f = fragment() ? "update" : "create";
               
               github.getGist(fragment() || null)[f]({
+                description: description,
                 public: true,
-                description: title,
-                files: files
+                files: {
+                  "board.svg": {
+                    content: toStandaloneSVG(page())
+                  }
+                }
               }, function(e, g) {
-                  if(e) throw(e);
-                  // TODO use g.history array to generate link to specific version
-                  updateFooter("saved to " + g.id);
-                  shell.openExternal('https://cdn.rawgit.com/' + username + '/' + g.id + '/raw/' + filename);
+                if(e) throw(e);
+                updateFooter("saved to " + g.id);
+                window.location.hash = g.id;
               });
               
               document.onkeydown = oldKeyDown;
@@ -288,14 +250,33 @@
         });
       }
       
-      document.onmousedown = function(e) {
-        if(e.button == 2) { changeTool(page(), tools.pan); }
+      document.onkeydown = function(e) {
+        // undo
+        if(pressed(e, "Z")) { root().removeChild(lastPolyline()); pushGist(); }
         
-        if(e.altKey) document.body.style = e.altKey;
-      }
-      
-      document.onmouseup = function(e) {
-        document.body.style = "";
+        // pan
+        if(pressed(e, "P")) { changeTool(page(), tools.pan); }
+
+        // toggle grid
+        if(pressed(e, "G")) { toggleGrid(); }
+
+        // increase brush size
+        if(pressed(e, "Q")) { addBrushSize(1); }
+        // decrease brush size
+        if(pressed(e, "A")) { addBrushSize(-1); }
+
+        // change color
+        if(pressed(e, "C")) { rotateColor(); }
+        
+        // clear
+        if(pressed(e, "N")) {
+          console.log("new");
+          document.body.removeChild(page());
+          newBoard();
+        }
+        
+        // save
+        if(pressed(e, "S")) { document.onkeyup = function() { setTimeout(save, 0) }; }
       }
       
       function fragment() {
@@ -303,19 +284,17 @@
       }
       
       window.onload = function() {        
-        // WIP rethink loading from gists
-        // if(!!fragment()) {
-        //   console.log("load from github");
-        //   github.getGist(fragment()).read(function(e, g) {
-        //     if(e) throw(e);
-        //     if(!g.files) throw("no files");
-        //     if(!g.files["board.svg"]) throw("no file named board.svg");
-        //     newBoard(stripSVGTags(g.files["board.svg"].content));
-        //     
-        //   });
-        // }
+        if(!!fragment()) {
+          console.log("load from github");
+          github.getGist(fragment()).read(function(e, g) {
+            if(e) throw(e);
+            if(!g.files) throw("no files");
+            if(!g.files["board.svg"]) throw("no file named board.svg");
+            newBoard(stripSVGTags(g.files["board.svg"].content));
+            
+          });
           
-        if(localStorage.boards) {
+        } else if(localStorage.boards) {
           console.log("restore from localStorage");
           newBoard(JSON.parse(localStorage.boards));
           
@@ -330,119 +309,9 @@
           localStorage.boards = JSON.stringify(page().innerHTML);
         }, 1000)
       }
-      
-      function hideDragBar() {
-        document.querySelector("#drag-bar").setAttribute("class", "hidden");
-      }
-      
-      function showDragBar() {
-        document.querySelector("#drag-bar").removeAttribute("class");
-      }
-      
-      var {BrowserWindow} = require('electron').remote;
-      
-      window.onresize = function() {
-        // redraw hack
-        document.body.style.opacity = "0.99"
-        setTimeout(() => {
-          document.body.style.opacity = "1";
-          if(BrowserWindow.getFocusedWindow().isFullScreen()) {
-            hideDragBar();
-          } else {
-            showDragBar();
-          }
-        }, 0)
-      }
-      
-      // pushes an image to the center of the view
-      function pushImage (data) {
-        var matrix = page() ? page().querySelector("g").transform.baseVal[0].matrix
-                            : { e:0, f:0 };
-        // hack to get image width
-        var newImage = document.createElement("img")
-        newImage.setAttribute("src", data)
-        var newSvgImage = document.createElementNS("http://www.w3.org/2000/svg", "image");
-        newSvgImage.setAttribute("href", data);
-        newSvgImage.setAttribute("x", window.innerWidth/2 - matrix.e - newImage.width/2);
-        newSvgImage.setAttribute("y", window.innerHeight/2 - matrix.f - newImage.height/2);
-        newSvgImage.setAttribute("width", newImage.width);
-        newSvgImage.setAttribute("height", newImage.height);
-        console.log(newImage.width + "x" + newImage.height);
-        page().querySelector("g").appendChild(newSvgImage);
-      }
-      
-      function getBlob(url, cb) {
-        var request = new XMLHttpRequest();
-        request.responseType = "blob";
-        request.onload = function() {
-          if(request.status === 200)
-            cb(this.response);
-          else
-            console.log(url + " failed " + request.status);
-        }
-        request.open('GET', url, true);
-        request.send(null);
-      }
-      
-      function readBlob (blob, cb) {
-        var reader = new FileReader();
-        reader.onload = function () {
-          cb(reader.result);
-        }
-        reader.readAsDataURL(blob);
-      }
-      
-      document.onpaste = function(event) {
-        var items = event.clipboardData.items;
-        for (var i = 0; i < items.length; i++) {
-          if(items[i].kind == "file") {
-            readBlob(items[i].getAsFile(), pushImage);
-          }
-        };
-      }
-
-      document.ondragover = function(event) {
-        event.stopPropagation();
-        event.preventDefault();
-        event.dataTransfer.dropEffect = 'copy';
-      }
-      
-      document.ondrop = function(event) {
-        event.stopPropagation();
-        event.preventDefault();
-        
-        if(event.dataTransfer.getData("text/html")) {
-          console.log(event.dataTransfer.getData("text/html"))
-          var temp = document.createElement('temp');
-          temp.innerHTML = event.dataTransfer.getData("text/html");
-          var remoteUrl = temp.querySelector("img").getAttribute("src");
-          getBlob(remoteUrl, function(blob) {
-            readBlob(blob, pushImage);
-          })
-        }
-        
-        // dragged files (e.g. from finder)
-        var files = event.dataTransfer.files;
-        for (var i = 0; i < files.length; i++) {
-          var blob = files[i];
-          if (blob.type.match(/image.*/)) {
-            readBlob(blob, pushImage);
-          }
-        }
-      }
-      
-      document.onmousewheel = function(event) {
-        event.preventDefault();
-        var transform = page().querySelector("g").transform.baseVal[0];
-        transform.setMatrix(transform.matrix.translate(
-          -event.deltaX,
-          -event.deltaY));
-      }
     </script>
-    <script type="text/javascript" src="menus.js"></script>
 </head>
 <body>
-    <div id="drag-bar"></div>
-    <!-- <div id="footer">∞</div> -->
+    <div id="footer"><span>n</span> - new  |  <span>z</span> - undo  |  <span>p</span> - pan  |  <span>g</span> - grid  |  <span>c</span> - color  |  <span>s</span> - save</div>
 </body>
 </html>
