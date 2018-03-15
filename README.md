@@ -17,6 +17,6 @@ Better with a tablet.
 
 ## License
 
-Additional features by Luis Rodil-Fernandez.
+Some features by Luis Rodil-Fernandez.
 
 Copyright © Ramsey Nasser 2015. Provided under the [MIT License](http://opensource.org/licenses/MIT).
